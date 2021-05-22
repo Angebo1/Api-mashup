@@ -7,7 +7,6 @@ const querystring = require("querystring");
 const coinGecko = require("coingecko-api");
 
 const coinGeckoClient = new coinGecko();
-const pb_apikey = "CK6pMm9Z7DIy2r3YZEVHGKi01YNYhC_-";
 
 const port = 3000;
 const server = http.createServer();
@@ -30,18 +29,8 @@ function request_handler(req, res){
     else if(req.url.startsWith("/crypto")){
         res.writeHead(200, {"Content-Type": "text/html"});
         let {name} = url.parse(req.url, true).query;
-        const state = crypto.randomBytes(20).toString("hex");
         crypto_info(name, res);
     }
-    else if(req.url.startsWith("/receive_code")){
-		const {state} = url.parse(req.url, true).query;
-		let session = all_sessions.find(session => session.state === state);
-        if(code === undefined || state === undefined || session === undefined){
-			not_found(res);
-			return;
-		}
-		const {description, location} = session;
-		send_access_token_request(code, {description, location}, res);
     else{
         err(res);
     } 
@@ -61,7 +50,7 @@ function process_stream(stream, callback, ...args){
 function crypto_info(name, res){
     const gecko_endpoint = `https://api.coingecko.com/api/v3/simple/price?ids=${name}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_last_updated_at=true`;
     https.request(gecko_endpoint, 
-        {method:"GET"}, 
+    {method:"GET"}, 
     (crypto_stream) => process_stream(crypto_stream, display_results, name, res))
     .end();
 }
@@ -75,29 +64,26 @@ function display_results(crypto_data, name, res){
         volume = crypto[name]["usd_24h_vol"];
         
     }
-    pastebin(price, market_cap, volume);
-    function pastebin(price, market_cap, volume){
-        const pb_url = "https://pastebin.com/api/api_post.php";
-        const options = {
-            method: "POST",
-            headers:{
-                "Content-Type": "application/x-www-form-urlencoded",
-                api_dev_key: pb_apikey,
-                api_option: "paste",
-                api_paste_code: `<h1>${name}</h1><p>${price}</p><p>${market_cap}</p><p>${volume}</p>`,
-                api_paste_private: "0",
-                api_paste_format: "php"
+    pastebin(price, market_cap, volume, res);
+    function pastebin(price, market_cap, volume, res){
+        const pb_url = 'https://pastebin.com/api/api_post.php';
+        var options = {
+            'method': 'POST',
+            'headers': {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: {
+                'api_dev_key': 'tCAlea81xIVy6_16M0qY98LVGOTEcIaA',
+                'api_paste_code': `${name}\n${price}\n${market_cap}\n${volume}`,
+                'api_option': 'paste'
             }
-        }
-        https.request(pb_url, options, (pb_stream)=>process_stream(pb_stream, results, res)).end();
+        };
+        https.request(pb_url, options, (pb_stream) => redirect_to_pb(pb_stream, res)).end(); 
+  
     }
+    
 }
 
-function results(body, res){
-    const results = JSON.stringify(body);
-    done(results, res);
-}
-function done (body, res){
-    const end = JSON.parse(body);
-    res.writeHead(302, {Location: `${end.url}`}).end();
+function redirect_to_pb (response, res){ 
+    res.writeHead(302, {Location: `${response.body}`}).end();
 }
